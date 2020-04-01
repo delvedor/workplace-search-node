@@ -10,11 +10,14 @@ const refParser = require('@apidevtools/json-schema-ref-parser')
 const dedent = require('dedent')
 
 const workplaceSearchFile = join(__dirname, '..', 'index.js')
+const workplaceSearchDefFile = join(__dirname, '..', 'index.d.ts')
 
 async function generate () {
   const spec = await refParser.dereference(require(join(__dirname, 'spec.json')))
   const { paths } = spec
   let code = ''
+  let interfaces = ''
+  let methodDef = ''
   for (const path in paths) {
     for (const method in paths[path]) {
       code += generateMethod(
@@ -24,11 +27,29 @@ async function generate () {
         paths[path][method]
       )
       code += '\n\n'
+
+      interfaces += await generateInterfaces(
+        paths[path][method].operationId,
+        path,
+        method,
+        paths[path][method]
+      )
+      interfaces += '\n\n'
+
+      methodDef += generateMethodTypeDef(
+        paths[path][method].operationId,
+        path,
+        method,
+        paths[path][method]
+      )
+      methodDef += '\n\n'
     }
   }
 
   // remove last two line breaks
   code = code.slice(0, -2)
+  interfaces = interfaces.slice(0, -2)
+  methodDef = methodDef.slice(0, -2)
 
   const oldFile = readFileSync(workplaceSearchFile, 'utf8')
   const start = oldFile.indexOf('/* GENERATED */')
@@ -37,6 +58,26 @@ async function generate () {
   writeFileSync(
     workplaceSearchFile,
     updatedCode,
+    { encoding: 'utf8' }
+  )
+
+  let oldDefFile = readFileSync(workplaceSearchDefFile, 'utf8')
+  const startInterfaces = oldDefFile.indexOf('/* INTERFACES */')
+  const endInterfaces = oldDefFile.indexOf('/* /INTERFACES */')
+  const updatedInterfaces = oldDefFile.slice(0, startInterfaces + 16) + '\n' + interfaces + '\n  ' + oldDefFile.slice(endInterfaces)
+  writeFileSync(
+    workplaceSearchDefFile,
+    updatedInterfaces,
+    { encoding: 'utf8' }
+  )
+
+  oldDefFile = readFileSync(workplaceSearchDefFile, 'utf8')
+  const startMethodDef = oldDefFile.indexOf('/* GENERATED */')
+  const endMethodDef = oldDefFile.indexOf('/* /GENERATED */')
+  const updatedMethodDef = oldDefFile.slice(0, startMethodDef + 15) + '\n' + methodDef + '\n  ' + oldDefFile.slice(endMethodDef)
+  writeFileSync(
+    workplaceSearchDefFile,
+    updatedMethodDef,
     { encoding: 'utf8' }
   )
 }
@@ -82,11 +123,8 @@ function generateMethod (name, url, method, spec) {
       acc = acc || {}
       acc[val.paramName] = `opts.${val.paramName}`
       return acc
-    }, null)
-  }
-
-  if (method === 'post') {
-    request.payload = `opts.${body.paramName}`
+    }, undefined),
+    payload: body ? `opts.${body.paramName}` : undefined
   }
 
   const requestStr = JSON.stringify(request, null, 2)
@@ -131,6 +169,52 @@ function generateMethod (name, url, method, spec) {
     }
     return code.trim()
   }
+}
+
+async function generateInterfaces (name, url, method, spec) {
+  const opts = spec.parameters.reduce((acc, val) => {
+    val.paramName = val['x-codegen-param-name'] || val.name
+    return acc.concat(val)
+  }, [])
+
+  const interfaceName = toPascalCase(name.replace(/_([a-z])/g, k => k[1].toUpperCase()))
+
+  const interfacesDef = {}
+  for (const opt of opts) {
+    if (opt.type) {
+      switch (opt.type) {
+        case 'integer':
+          interfacesDef[opt.paramName] = 'number'
+          break
+        default:
+          interfacesDef[opt.paramName] = opt.type
+      }
+    } else {
+      interfacesDef[opt.paramName] = opt.schema.type === 'array'
+        ? `${interfaceName}Body[]`
+        : `${interfaceName}Body`
+    }
+  }
+
+  const interfacesDefStr = JSON.stringify(interfacesDef, null, 2)
+    // split & join to fix the indentation
+    .split('\n')
+    .join('\n   ')
+    // remove useless quotes
+    .replace(/"/g, '')
+    .replace(/,$/gm, '')
+
+  return dedent`
+    export interface ${interfaceName}Params ${interfacesDefStr}
+  `
+}
+
+function generateMethodTypeDef (name, url, method, spec) {
+  return `  ${spec.operationId}(params: ${toPascalCase(name.replace(/_([a-z])/g, k => k[1].toUpperCase()))}Params): Record<string, any>`
+}
+
+function toPascalCase (str) {
+  return str[0].toUpperCase() + str.slice(1)
 }
 
 generate().catch(console.log)
