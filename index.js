@@ -31,7 +31,6 @@ class WorkplaceSearchClient {
     }
     return this[kClient].post({
       path: `sources/${opts.content_source_key}/documents/bulk_create`,
-      query: null,
       payload: opts.documents
     })
   }
@@ -53,7 +52,6 @@ class WorkplaceSearchClient {
     }
     return this[kClient].post({
       path: `sources/${opts.content_source_key}/documents/bulk_destroy`,
-      query: null,
       payload: opts.document_ids
     })
   }
@@ -95,8 +93,7 @@ class WorkplaceSearchClient {
       return Promise.reject(err)
     }
     return this[kClient].get({
-      path: `sources/${opts.content_source_key}/permissions/${opts.user}`,
-      query: null
+      path: `sources/${opts.content_source_key}/permissions/${opts.user}`
     })
   }
 
@@ -122,7 +119,6 @@ class WorkplaceSearchClient {
     }
     return this[kClient].post({
       path: `sources/${opts.content_source_key}/permissions/${opts.user}`,
-      query: null,
       payload: opts.permissions
     })
   }
@@ -149,7 +145,6 @@ class WorkplaceSearchClient {
     }
     return this[kClient].post({
       path: `sources/${opts.content_source_key}/permissions/${opts.user}/add`,
-      query: null,
       payload: opts.permissions
     })
   }
@@ -176,7 +171,6 @@ class WorkplaceSearchClient {
     }
     return this[kClient].post({
       path: `sources/${opts.content_source_key}/permissions/${opts.user}/remove`,
-      query: null,
       payload: opts.permissions
     })
   }
